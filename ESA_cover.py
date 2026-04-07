@@ -18,10 +18,10 @@ from terracatalogueclient import Catalogue
 
 ### Authenticate to the Terrascope platform (registration required) 
 # create catalogue object and authenticate interactively with a browser 
-catalogue = Catalogue().authenticate()  
+#catalogue = Catalogue().authenticate()  
 
 # or authenticate with username and password 
-# catalogue = catalogue.authenticate_non_interactive(username, password) 
+catalogue = catalogue.authenticate_non_interactive(remi.bealle@gmail.com, ) 
 
 ### Filter catalogue 
 # search for all products in the WorldCover collection 
