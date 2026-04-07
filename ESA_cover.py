@@ -1,3 +1,7 @@
+
+pip install --extra-index-url https://artifactory.vgt.vito.be/api/pypi/python-packages/simple terracatalogueclient 
+
+
 from terracatalogueclient import Catalogue 
 
 # create catalogue object and authenticate 
