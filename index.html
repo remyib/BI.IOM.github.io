@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas Multi-Risques Burundi 2026</title>
+
+  <!-- ── External libraries ── -->
+  <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+  <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet@2.3.0/dist/georaster-layer-for-leaflet.browser.min.js"></script>
+  <script src="https://unpkg.com/shpjs@4.0.4/dist/shp.js"></script>
+  <link  href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <!-- ── App styles (load order: base → layout → components) ── -->
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/panel.css">
+  <link rel="stylesheet" href="styles/map.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════════ -->
+<header>
+  <button class="hamburger" id="menuBtn">☰</button>
+  <div class="logo">Atlas Multi-Risques <span>/ Burundi 2026</span></div>
+  <div class="header-sep"></div>
+  <div class="header-pill" id="coordPill">3.3731°S 29.9189°E</div>
+  <div class="header-pill" id="zoomPill">Z8</div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════════
+     WORKSPACE
+════════════════════════════════════════════════════════════ -->
+<div class="workspace">
+
+  <!-- ── Side Panel ── -->
+  <aside class="panel" id="panel">
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab active" onclick="TabsModule.switchTab('repo', this)">
+        📁 Repository
+      </button>
+      <button class="tab" onclick="TabsModule.switchTab('layers', this)">
+        🗂 Layers <span id="layerCountBadge" style="color:var(--accent);"></span>
+      </button>
+    </div>
+
+    <!-- ── Repository Tab ── -->
+    <div class="tab-panel active" id="tab-repo">
+
+      <!-- Connect form -->
+      <div class="gh-connect">
+        <div class="sec-label">GitHub Connection</div>
+
+        <div class="repo-badge">
+          <div class="conn-dot" id="connDot"></div>
+          <span class="repo-name" id="repoLabel">remyib/BI_IOM</span>
+        </div>
+
+        <div class="field-label">Personal Access Token (PAT)</div>
+        <input class="text-input" type="password" id="patInput"
+               placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+
+        <div class="field-label">
+          Branch
+          <span style="color:var(--text-muted);font-size:0.5rem;"> (default: main)</span>
+        </div>
+        <input class="text-input" type="text" id="branchInput"
+               placeholder="main" value="main">
+
+        <button class="primary-btn" id="connectBtn"
+                onclick="BrowserModule.connect()">
+          Connect &amp; Browse
+        </button>
+
+        <div id="connMsg" class="conn-msg"></div>
+      </div>
+
+      <!-- File browser toolbar (hidden until connected) -->
+      <div class="browser-toolbar" id="browserToolbar">
+        <div class="breadcrumb" id="breadcrumb">
+          <span onclick="BrowserModule.navTo('')">root</span>
+        </div>
+        <button class="toolbar-btn" onclick="BrowserModule.refresh()" title="Refresh">↺</button>
+        <button class="toolbar-btn" id="loadSelectedBtn"
+                onclick="BrowserModule.loadSelected()" disabled>
+          ↓ Load
+        </button>
+      </div>
+
+      <!-- File tree -->
+      <div class="file-tree" id="fileTree">
+        <div class="tree-empty">
+          Connect to a repository above<br>to browse and load files.
+        </div>
+      </div>
+
+    </div><!-- /tab-repo -->
+
+    <!-- ── Layers Tab ── -->
+    <div class="tab-panel" id="tab-layers">
+      <div class="layer-list" id="layerList">
+        <div class="layer-empty">
+          <span class="em">🗂</span>
+          No layers loaded yet.<br>Browse the repository and<br>click files to add them.
+        </div>
+      </div>
+    </div><!-- /tab-layers -->
+
+    <!-- Status bar -->
+    <div class="statusbar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Not connected</span>
+    </div>
+
+  </aside><!-- /panel -->
+
+  <!-- ── Map ── -->
+  <div class="map-container">
+    <div id="map"></div>
+
+    <!-- Loading overlay -->
+    <div class="map-overlay" id="loadOverlay">
+      <div class="spinner"></div>
+      <div class="overlay-text" id="overlayMsg">Loading…</div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-wrap" id="toastWrap"></div>
+  </div>
+
+</div><!-- /workspace -->
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SCRIPTS  (dependency order matters)
+     1. config      — constants, no deps
+     2. ui/toast    — no app deps
+     3. ui/ui       — depends on toast
+     4. ui/tabs     — no app deps
+     5. map/map     — depends on config
+     6. map/layers  — depends on config, map
+     7. github/api  — depends on config
+     8. github/loader — depends on api, layers, ui
+     9. ui/browser  — depends on all above
+    10. main        — wires events, boots app
+════════════════════════════════════════════════════════════ -->
+<script src="config.js"></script>
+<script src="ui/toast.js"></script>
+<script src="ui/ui.js"></script>
+<script src="ui/tabs.js"></script>
+<script src="map/map.js"></script>
+<script src="map/layers.js"></script>
+<script src="github/api.js"></script>
+<script src="github/loader.js"></script>
+<script src="ui/browser.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  main — Application bootstrap & event wiring
+//  This block should stay minimal. All logic lives in modules.
+// ════════════════════════════════════════════════════════════
+
+// Initialise the map
+MapModule.init();
+
+// ── Keyboard shortcuts ──────────────────────────────────────
+document.getElementById('patInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') BrowserModule.connect();
+});
+document.getElementById('branchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') BrowserModule.connect();
+});
+
+// ── Mobile panel toggle ─────────────────────────────────────
+document.getElementById('menuBtn').addEventListener('click', () => {
+  document.getElementById('panel').classList.toggle('open');
+});
+
+MapModule.get().on('click', () => {
+  if (window.innerWidth < 768) {
+    document.getElementById('panel').classList.remove('open');
+  }
+});
+</script>
+
+</body>
+</html>
