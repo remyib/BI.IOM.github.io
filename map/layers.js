@@ -25,17 +25,18 @@ const LayersModule = (() => {
    * @param {string}        repoPath     Source file path in the repo
    * @returns {string}                   Layer id
    */
-  function add(name, type, leafletLayer, color, repoPath) {
+  function add(name, type, leafletLayer, color, repoPath, georaster) {
     const id = `layer_${++_idCounter}`;
     _registry[id] = {
       id,
       name,
       type,
       leafletLayer,
-      visible:  true,
-      opacity:  1,
-      color:    color || _nextColor(),
-      repoPath: repoPath || '',
+      visible:   true,
+      opacity:   1,
+      color:     color || _nextColor(),
+      repoPath:  repoPath || '',
+      georaster: georaster || null,   // stored for raster layer recreation
     };
     _render();
     _updateStatus();
@@ -56,9 +57,25 @@ const LayersModule = (() => {
     const entry = _registry[id];
     if (!entry) return;
     entry.visible = !entry.visible;
-    entry.visible
-      ? entry.leafletLayer.addTo(MapModule.get())
-      : MapModule.get().removeLayer(entry.leafletLayer);
+
+    if (entry.visible) {
+      // For raster layers, recreate the GeoRasterLayer to avoid
+      // tile cache collisions between multiple rasters
+      if (entry.type === 'raster' && entry.georaster) {
+        MapModule.get().removeLayer(entry.leafletLayer);
+        const newLyr = new GeoRasterLayer({
+          georaster: entry.georaster,
+          opacity:   entry.opacity,
+          resolution: 256
+        });
+        entry.leafletLayer = newLyr;
+        newLyr.addTo(MapModule.get());
+      } else {
+        entry.leafletLayer.addTo(MapModule.get());
+      }
+    } else {
+      MapModule.get().removeLayer(entry.leafletLayer);
+    }
     _render();
   }
 

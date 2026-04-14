@@ -75,20 +75,30 @@ const Loader = (() => {
   }
 
   async function _loadGeoTIFF(item) {
-    // For private repos, raw.githubusercontent.com blocks Authorization headers (CORS).
-    // Use the GitHub Contents API instead, which returns the file base64-encoded.
-    const data = await GitHubAPI.get(
-      `/repos/${CONFIG.github.repo}/contents/${item.path}?ref=${GitHubAPI.getBranch()}`
-    );
-    // Decode base64 → ArrayBuffer
-    const binary = atob(data.content.replace(/\n/g, ''));
-    const buf = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+    let georaster;
 
-    const georaster = await parseGeoraster(buf.buffer);
+    if (CONFIG.rasterProxyUrl) {
+      // ── Fast path: stream via Cloudflare Worker proxy ──────
+      // PAT is held server-side in the Worker — no CORS issues, no base64 overhead
+      const proxyUrl = `${CONFIG.rasterProxyUrl}?path=${CONFIG.github.repo}/${GitHubAPI.getBranch()}/${item.path}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
+      const buf = await res.arrayBuffer();
+      georaster = await parseGeoraster(buf);
+    } else {
+      // ── Fallback: GitHub Contents API (base64) ─────────────
+      const data = await GitHubAPI.get(
+        `/repos/${CONFIG.github.repo}/contents/${item.path}?ref=${GitHubAPI.getBranch()}`
+      );
+      const binary = atob(data.content.replace(/\n/g, ''));
+      const buf = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+      georaster = await parseGeoraster(buf.buffer);
+    }
+
     const lyr = new GeoRasterLayer({ georaster, opacity: 0.8, resolution: 256 });
     lyr.addTo(MapModule.get());
-    const id = LayersModule.add(_baseName(item.name), 'raster', lyr, null, item.path);
+    const id = LayersModule.add(_baseName(item.name), 'raster', lyr, null, item.path, georaster);
     _fitBounds(lyr);
     UIModule.toast(`✓ ${item.name} (raster)`);
     return id;
